@@ -19,26 +19,12 @@ let g = F(H, (_) => F(W, (_) => 0));
 let current = [(W * 0.5) + Math.random()*0 | 0, (H * (0.5 + offsetY / 2))  + Math.random()*0 | 0];
 let stack = [current];
 
-// FIXME mode untill edge neighs exist
-
-// FIXME remove
 function getTileVertices(i, j) {
 	let flip = getTileFlip(i, j);
 	if(flip)
 		return [[mod(i-1,W),mod(j-1,H)],[mod(i,W),mod(j,H)],[mod(i-2,W),mod(j,H)]]
 	else
 		return [[mod(i-2,W),mod(j-1,H)],[mod(i,W),mod(j-1,H)],[mod(i-1,W),mod(j,H)]]
-}
-
-function getNeighVertices(i,j){
-	let vertices = []
-	vertices.push([mod(i+2,W),mod(j,H)])
-	vertices.push([mod(i+1,W),mod(j-1,H)])
-	vertices.push([mod(i-1,W),mod(j-1,H)])
-	vertices.push([mod(i-2,W),mod(j,H)])
-	vertices.push([mod(i-1,W),mod(j+1,H)])
-	vertices.push([mod(i+1,W),mod(j+1,H)])
-	return vertices
 }
 
 function getTilesContainingVertex(i,j){
@@ -50,17 +36,6 @@ function getTilesContainingVertex(i,j){
 	tiles.push([i+2,j+1])
 	tiles.push([i,j+1])
 	return tiles
-}
-
-function checkIfVertexOnBorder(i,j){
-	let tiles = getTilesContainingVertex(i,j)
-	let hasEmpty = false
-	let hasFilled = false
-	for(let t of tiles){
-		if(getG(...t) == 0) hasEmpty = true
-		if(getG(...t) == 1) hasFilled = true
-	}
-	return hasEmpty && hasFilled
 }
 
 function makeSVGPath(path) {
