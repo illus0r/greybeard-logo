@@ -65,6 +65,26 @@ function checkIfVertexOnBorder(i,j){
 	return hasEmpty && hasFilled
 }
 
+function makeSVGPath(path) {
+	let d = ''
+	d += path.map((d,i)=>(i==0?'M':'L')+[d[0], d[1] * 1.732].join(' ')).join('')
+	return d
+}
+
+function getPathBoundingBox(path) {
+	let minX = Infinity
+	let minY = Infinity
+	let maxX = -Infinity
+	let maxY = -Infinity
+	for(let p of path) {
+		minX = Math.min(minX, p[0])
+		minY = Math.min(minY, p[1])
+		maxX = Math.max(maxX, p[0])
+		maxY = Math.max(maxY, p[1])
+	}
+	return [minX, minY, maxX-minX, maxY-minY]
+}
+
 function setup() {
   createCanvas(600, 600);
 	background(0);
@@ -74,19 +94,37 @@ function setup() {
   makeOutline();
   setG(...current, 1);
   while (!processMaze());
-}
 
-function draw() {
-	// F(400,processMaze)
-	trace(W/2|0,H/2|0)
+	// create svg element
+	const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+	const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+	shape.setAttribute("fill-rule", "evenodd");
+	shape.setAttribute("fill", "black");
+
+	let path = trace(W/2|0,H/2|0)
+	let d = ''
+	d += makeSVGPath(path)
+
 	for(let j=0;j<H;j++){
 		for(let i=0;i<W;i++){
 			if(getG(i,j) == 0) {
-				trace(i,j)
+				let pathOuter = trace(i,j)
+				d += makeSVGPath(pathOuter)
+				shape.setAttribute("d", d);
+				let bb = getPathBoundingBox(pathOuter)
+				let [x, y, w, h] = bb
+				svg.setAttribute("viewBox", `${x} ${y*1.732} ${w} ${h*1.732}`);
+				svg.setAttribute("width", 500);
+				svg.setAttribute("height", 500);
+				svg.appendChild(shape);
+				document.body.appendChild(svg);
 				return
 			}
 		}
 	}
+}
+
+function draw() {
 	noLoop();
 }
 ////{{{
@@ -363,7 +401,7 @@ function trace(i,j) {
 	// let id=0;
 
 
-	for(let n=0;n<999;n++){
+	while(true){
 		let nn = getNeighBorderVertices(...path[path.length-1]);
 		nn = nn.filter(v=>!vertIsInPath(path,...v))
 		if(nn.length==0) break
@@ -390,4 +428,5 @@ function trace(i,j) {
 	// vertex(width, height)
 	endShape()
 	// save()
+	return path
 }
