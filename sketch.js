@@ -1,3 +1,11 @@
+/*
+ * Copyright (c) 2024 Ivan Dianov
+ *
+ * This file is part of the Greybeard generative logo project.
+ * It is distributed under the terms of the GNU General Public License v3.0.
+ * You can obtain a copy of this license at https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
 // swap current tile with a random time from stack
 // set to 1 for a snowflake
 let swapProbability = 0.0;
