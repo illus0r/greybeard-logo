@@ -16,9 +16,7 @@ let F = (n, f) => [...Array(n | 0)].map((_, i) => f(i));
 let W = 100;
 let H = (W / 1.732) | 0;
 let g = F(H, (_) => F(W, (_) => 0));
-let szW, szH;
 let current = [(W * 0.5) + Math.random()*0 | 0, (H * (0.5 + offsetY / 2))  + Math.random()*0 | 0];
-console.log('current:',current)
 let stack = [current];
 
 // FIXME mode untill edge neighs exist
@@ -85,48 +83,38 @@ function getPathBoundingBox(path) {
 	return [minX, minY, maxX-minX, maxY-minY]
 }
 
-function setup() {
-  createCanvas(600, 600);
-	background(0);
-  noStroke();
-  szW = width / W;
-  szH = szW * 1.732;
-  makeOutline();
-  setG(...current, 1);
-  while (!processMaze());
+makeOutline();
+setG(...current, 1);
+while (!processMaze());
 
-	// create svg element
-	const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-	const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
-	shape.setAttribute("fill-rule", "evenodd");
-	shape.setAttribute("fill", "black");
+// create svg element
+const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+shape.setAttribute("fill-rule", "evenodd");
+shape.setAttribute("fill", "black");
 
-	let path = trace(W/2|0,H/2|0)
-	let d = ''
-	d += makeSVGPath(path)
+let path = trace(W/2|0,H/2|0)
+let d = ''
+d += makeSVGPath(path)
 
-	for(let j=0;j<H;j++){
-		for(let i=0;i<W;i++){
-			if(getG(i,j) == 0) {
-				let pathOuter = trace(i,j)
-				d += makeSVGPath(pathOuter)
-				shape.setAttribute("d", d);
-				let bb = getPathBoundingBox(pathOuter)
-				let [x, y, w, h] = bb
-				svg.setAttribute("viewBox", `${x} ${y*1.732} ${w} ${h*1.732}`);
-				svg.setAttribute("width", 500);
-				svg.setAttribute("height", 500);
-				svg.appendChild(shape);
-				document.body.appendChild(svg);
-				return
-			}
+outer: for(let j=0;j<H;j++){
+	for(let i=0;i<W;i++){
+		if(getG(i,j) == 0) {
+			let pathOuter = trace(i,j)
+			d += makeSVGPath(pathOuter)
+			shape.setAttribute("d", d);
+			let bb = getPathBoundingBox(pathOuter)
+			let [x, y, w, h] = bb
+			svg.setAttribute("viewBox", `${x} ${y*1.732} ${w} ${h*1.732}`);
+			svg.setAttribute("width", 500);
+			svg.setAttribute("height", 500);
+			svg.appendChild(shape);
+			document.body.appendChild(svg);
+			break outer
 		}
 	}
 }
 
-function draw() {
-	noLoop();
-}
 ////{{{
 function sdfTriangle(uv, r) {
   const k = Math.sqrt(3.0);
@@ -194,8 +182,6 @@ function getG(i, j) {
 function setG(i, j, value) {
   i = mod(i, W);
   j = mod(j, H);
-  if (value == 1) drawTile(i, j);
-  else drawTile(i, j, "black");
   g[j][i] = value;
 }
 
@@ -316,27 +302,6 @@ function searchPoints(array, points) {
 	return indices;
 }
 
-function drawTile(i, j, col = "white") {
-	fill(col);
-	let [x, y] = ij2xy(i, j);
-	let flip = getTileFlip(i, j);
-	noStroke();
-	if (flip) {
-		triangle(x - szW, y + szH / 2, x + szW, y + szH / 2, x, y - szH / 2);
-		//rect
-	} else {
-		triangle(x - szW, y - szH / 2, x + szW, y - szH / 2, x, y + szH / 2);
-	}
-	// fill('red')
-	// stroke(0)
-	// rect(x - szW*.4, y - szH*.4, szW*.8, szH*.8);
-}
-
-function ij2xy(i, j) {
-	return [i * szW + szW / 2, j * szH + szH / 2];
-}
-
-
 function getNeighBorderVertices(i, j) {
 	let tiles = getTilesContainingVertex(i, j);
 	let vertexes = [];
@@ -377,29 +342,6 @@ function vertIsInPath(path, i, j) {
 // i,j is a tile coordinates
 function trace(i,j) {
 	let path = [getTileVertices(i,j)[0]];
-	stroke('red')
-
-	// let flip=getTileFlip(i,j)
-	for(let j=0;j<H;j++){
-		for(let i=0;i<W;i++){
-			if((i+j)%2==0) continue
-			let [x,y]=ij2xy(i,j)
-			x+=szW
-			y+=szH/2
-			circle(x,y,2)
-			fill('red')
-			noStroke()
-			textSize(16)
-			// text(`${i}\n${j}`,x+5,y+9)
-		}
-	}
-
-	noFill()
-	stroke('#FF00EE');
-	strokeWeight(3);
-	beginShape()
-	// let id=0;
-
 
 	while(true){
 		let nn = getNeighBorderVertices(...path[path.length-1]);
@@ -409,24 +351,5 @@ function trace(i,j) {
 		path.push(next)
 	}
 
-	for(let p of path){
-		vertex(...ij2xy(...p).map(x=>x+szW))
-		let [i,j]=p
-		let [x,y]=ij2xy(...p)
-		x+=szW
-		y+=szH/2
-		circle(x,y,2)
-		// push()
-		// 	fill('green')
-		// 	noStroke()
-		// 	textSize(6)
-		// 	text(`${id}`,x+2,y+2)
-		// pop()
-		// id++
-	}
-	// vertex(width, 0)
-	// vertex(width, height)
-	endShape()
-	// save()
 	return path
 }
