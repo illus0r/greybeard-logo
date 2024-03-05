@@ -9,15 +9,66 @@
 // swap current tile with a random time from stack
 // set to 1 for a snowflake
 let swapProbability = 0.0;
+
 let randomness = 0.1;
 let offsetY = -0.12;
+// ratio between the height and half the side of equalateral triangle
+let ratio = 1.732
 
+// iterator, can be replaced with for loop
 let F = (n, f) => [...Array(n | 0)].map((_, i) => f(i));
-let W = 100;
-let H = (W / 1.732) | 0;
+
+// sides of the grid are outside of SVG viewBox and are not visible
+let W = 100; // width of the grid.
+let H = (W / ratio) | 0; // height
 let g = F(H, (_) => F(W, (_) => 0));
-let current = [(W * 0.5) + Math.random()*0 | 0, (H * (0.5 + offsetY / 2))  + Math.random()*0 | 0];
+// current tile
+let current = [W * 0.5 | 0, H * (0.5 + offsetY / 2) | 0];
 let stack = [current];
+
+// draw the shape to be filled with maze
+makeOutline();
+// set initial tile
+setG(...current, 1);
+// build the maze
+while (!processMaze());
+
+// create svg element
+const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+shape.setAttribute("fill-rule", "evenodd");
+shape.setAttribute("fill", "black");
+
+// trace the internal structure of the maze
+let path = trace(W/2|0,H/2|0)
+// path attribute for SVG element
+let d = ''
+d += makeSVGPath(path)
+
+// search for outer boundary of the maze
+outer: for(let j=0;j<H;j++){
+	for(let i=0;i<W;i++){
+		// if the tile is filled,
+		// trace the line and exit both for loops
+		if(getG(i,j) == 0) {
+			let pathOuter = trace(i,j)
+			d += makeSVGPath(pathOuter)
+			// find boundaries of the outer path
+			let bb = getPathBoundingBox(pathOuter)
+			let [x, y, w, h] = bb
+			// use it to crop SVG
+			svg.setAttribute("viewBox", `${x} ${y*ratio} ${w} ${h*ratio}`);
+			break outer
+		}
+	}
+}
+
+shape.setAttribute("d", d);
+svg.setAttribute("width", 500);
+svg.setAttribute("height", 500);
+svg.appendChild(shape);
+document.body.appendChild(svg);
+
 
 function getTileVertices(i, j) {
 	let flip = getTileFlip(i, j);
@@ -40,7 +91,7 @@ function getTilesContainingVertex(i,j){
 
 function makeSVGPath(path) {
 	let d = ''
-	d += path.map((d,i)=>(i==0?'M':'L')+[d[0], d[1] * 1.732].join(' ')).join('')
+	d += path.map((d,i)=>(i==0?'M':'L')+[d[0], d[1] * ratio].join(' ')).join('')
 	return d
 }
 
@@ -58,234 +109,184 @@ function getPathBoundingBox(path) {
 	return [minX, minY, maxX-minX, maxY-minY]
 }
 
-makeOutline();
-setG(...current, 1);
-while (!processMaze());
 
-// create svg element
-const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
-shape.setAttribute("fill-rule", "evenodd");
-shape.setAttribute("fill", "black");
-
-let path = trace(W/2|0,H/2|0)
-let d = ''
-d += makeSVGPath(path)
-
-outer: for(let j=0;j<H;j++){
-	for(let i=0;i<W;i++){
-		if(getG(i,j) == 0) {
-			let pathOuter = trace(i,j)
-			d += makeSVGPath(pathOuter)
-			shape.setAttribute("d", d);
-			let bb = getPathBoundingBox(pathOuter)
-			let [x, y, w, h] = bb
-			svg.setAttribute("viewBox", `${x} ${y*1.732} ${w} ${h*1.732}`);
-			svg.setAttribute("width", 500);
-			svg.setAttribute("height", 500);
-			svg.appendChild(shape);
-			document.body.appendChild(svg);
-			break outer
-		}
-	}
-}
-
-////{{{
 function sdfTriangle(uv, r) {
-  const k = Math.sqrt(3.0);
-  uv[0] = Math.abs(uv[0]) - r;
-  uv[1] = uv[1] + r / k;
-  if (uv[0] + k * uv[1] > 0.0) {
-    const tempX = uv[0] - k * uv[1];
-    const tempY = -k * uv[0] - uv[1];
-    uv[0] = tempX / 2.0;
-    uv[1] = tempY / 2.0;
-  }
-  uv[0] -= Math.min(Math.max(uv[0], -2.0 * r), 0.0);
-  return -Math.sqrt(uv[0] * uv[0] + uv[1] * uv[1]) * Math.sign(uv[1]);
-}
-
-function healOutline() {
-  F(H, (j) =>
-    F(W, (i) => {
-      let me = getG(i, j);
-      let neighCount = countCloseNeigh(i, j);
-      if (!me && neighCount == 2) setG(i, j, 1);
-    })
-  );
-}
-
-function makeOutline() {
-  F(H, (j) =>
-    F(W, (i) => {
-      let uv = getUV(i, j);
-      let [u, v] = uv;
-      let tr1 = sdfTriangle([u, v - offsetY], 0.53);
-      let tr2 = sdfTriangle([u, -v + offsetY], 0.868);
-      if (-Math.max(tr1, tr2) < 0.0016) setG(i, j, 1);
-      else setG(i, j, 0);
-    })
-  );
-  F(5, (_) => healOutline());
-}
-
-function getUV(i, j) {
-  return [i / W, j / H].map((d) => d * 2 - 1);
-}
-
-function getFitness(i, j) {
-  let uv = getUV(i, j);
-  let [u, v] = uv;
-	// return -Math.hypot(u, v)+randomness*Math.random()
-  return sdfTriangle([u, -v - offsetY], 0.868) + Math.random() * randomness;
-}
-
-function getTileFlip(i, j) {
-  return !!((i + j) % 2);
-}
-
-function mod(x, m) {
-  return ((x % m) + m) % m;
-}
-
-function getG(i, j) {
-  i = mod(i, W);
-  j = mod(j, H);
-  return g[j][i];
-}
-
-function setG(i, j, value) {
-  i = mod(i, W);
-  j = mod(j, H);
-  g[j][i] = value;
-}
-
-function checkAvailability(i, j) {
-  let ns = countThreeNeighGroups(i, j);
-  return Math.min(...ns) == 0;
+	const k = Math.sqrt(3.0);
+	uv[0] = Math.abs(uv[0]) - r;
+	uv[1] = uv[1] + r / k;
+	if (uv[0] + k * uv[1] > 0.0) {
+		const tempX = uv[0] - k * uv[1];
+		const tempY = -k * uv[0] - uv[1];
+		uv[0] = tempX / 2.0;
+		uv[1] = tempY / 2.0;
+	}
+	uv[0] -= Math.min(Math.max(uv[0], -2.0 * r), 0.0);
+	return -Math.sqrt(uv[0] * uv[0] + uv[1] * uv[1]) * Math.sign(uv[1]);
 }
 
 function countCloseNeigh(i, j) {
-  let ns = getCloseNeigh(i, j);
-  return getG(...ns[0]) + getG(...ns[1]) + getG(...ns[2]);
+	let ns = getCloseNeigh(i, j);
+	return getG(...ns[0]) + getG(...ns[1]) + getG(...ns[2]);
+}
+
+function healOutline() {
+	F(H, (j) =>
+		F(W, (i) => {
+			let me = getG(i, j);
+			let neighCount = countCloseNeigh(i, j);
+			if (!me && neighCount == 2) setG(i, j, 1);
+		})
+	);
+}
+
+function makeOutline() {
+	F(H, (j) =>
+		F(W, (i) => {
+			let uv = getUV(i, j);
+			let [u, v] = uv;
+			let tr1 = sdfTriangle([u, v - offsetY], 0.53);
+			let tr2 = sdfTriangle([u, -v + offsetY], 0.868);
+			if (-Math.max(tr1, tr2) < 0.0016) setG(i, j, 1);
+			else setG(i, j, 0);
+		})
+	);
+	// in case sdf binarization results in damaged edges
+	F(5, (_) => healOutline());
+}
+
+function getUV(i, j) {
+	return [i / W, j / H].map((d) => d * 2 - 1);
+}
+
+function getFitness(i, j) {
+	let uv = getUV(i, j);
+	let [u, v] = uv;
+	return sdfTriangle([u, -v - offsetY], 0) + Math.random() * randomness;
+	// return -Math.hypot(u, v)+randomness*Math.random()
+}
+
+function getTileFlip(i, j) {
+	return !!((i + j) % 2);
+}
+
+function mod(x, m) {
+	return ((x % m) + m) % m;
+}
+
+function getG(i, j) {
+	i = mod(i, W);
+	j = mod(j, H);
+	return g[j][i];
+}
+
+function setG(i, j, value) {
+	i = mod(i, W);
+	j = mod(j, H);
+	g[j][i] = value;
+}
+
+function checkAvailability(i, j) {
+	let ns = countThreeNeighGroups(i, j);
+	return Math.min(...ns) == 0;
 }
 
 function getCloseNeigh(i, j) {
-  let flip = getTileFlip(i, j);
-  let ns = [];
-  ns.push([mod(i - 1, W), mod(j, H)]);
-  ns.push([mod(i + 1, W), mod(j, H)]);
-  if (flip) {
-    ns.push([mod(i, W), mod(j + 1, H)]);
-  } else {
-    ns.push([mod(i, W), mod(j - 1, H)]);
-  }
-  return ns;
+	let flip = getTileFlip(i, j);
+	let ns = [];
+	ns.push([mod(i - 1, W), mod(j, H)]);
+	ns.push([mod(i + 1, W), mod(j, H)]);
+	if (flip) {
+		ns.push([mod(i, W), mod(j + 1, H)]);
+	} else {
+		ns.push([mod(i, W), mod(j - 1, H)]);
+	}
+	return ns;
 }
 
 function countThreeNeighGroups(i, j) {
-  let hex1 = 0,
-    hex2 = 0,
-    hex3 = 0;
-  let flip = getTileFlip(i, j);
+	let hex1 = 0,
+		hex2 = 0,
+		hex3 = 0;
+	let flip = getTileFlip(i, j);
 
-  for (let x = 0; x <= 2; x++) {
-    for (let y = -1 + flip; y <= 0 + flip; y++) {
-      hex1 += getG(i + x, j + y);
-    }
-  }
-  for (let x = -2; x <= 0; x++) {
-    for (let y = -1 + flip; y <= 0 + flip; y++) {
-      hex2 += getG(i + x, j + y);
-    }
-  }
-  for (let x = -1; x <= 1; x++) {
-    for (let y = 0 - flip; y <= 1 - flip; y++) {
-      hex3 += getG(i + x, j + y);
-    }
-  }
+	for (let x = 0; x <= 2; x++) {
+		for (let y = -1 + flip; y <= 0 + flip; y++) {
+			hex1 += getG(i + x, j + y);
+		}
+	}
+	for (let x = -2; x <= 0; x++) {
+		for (let y = -1 + flip; y <= 0 + flip; y++) {
+			hex2 += getG(i + x, j + y);
+		}
+	}
+	for (let x = -1; x <= 1; x++) {
+		for (let y = 0 - flip; y <= 1 - flip; y++) {
+			hex3 += getG(i + x, j + y);
+		}
+	}
 
-  return [hex1, hex2, hex3];
+	return [hex1, hex2, hex3];
 }
 
 function mod(x, m) {
-  return ((x % m) + m) % m;
+	return ((x % m) + m) % m;
 }
 
 function mod(x, m) {
-  return ((x % m) + m) % m;
+	return ((x % m) + m) % m;
 }
 
 function swapCurrentWithRandomStack() {
-  if (stack.length == 0) return current;
-  let id = (Math.random() * stack.length) | 0;
-  let newCurrent = stack[id];
-  stack[id] = current;
-  current = newCurrent;
-  return newCurrent;
+	if (stack.length == 0) return current;
+	let id = (Math.random() * stack.length) | 0;
+	let newCurrent = stack[id];
+	stack[id] = current;
+	current = newCurrent;
+	return newCurrent;
 }
-////}}}
+
 // returns true if done
 function processMaze() {
-  let [cx, cy] = current;
-  let availableNeighbors = getCloseNeigh(cx, cy).filter(([nx, ny]) =>
-    checkAvailability(nx, ny)
-  );
+	let [cx, cy] = current;
+	let availableNeighbors = getCloseNeigh(cx, cy).filter(([nx, ny]) =>
+		checkAvailability(nx, ny)
+	);
 
-  if (availableNeighbors.length > 0) {
-    let bestNeighbor = availableNeighbors[0];
-    let bestFitness = getFitness(bestNeighbor[0], bestNeighbor[1]);
-    for (let i = 1; i < availableNeighbors.length; i++) {
-      let [nx, ny] = availableNeighbors[i];
-      let currentFitness = getFitness(nx, ny);
-      if (currentFitness > bestFitness) {
-        bestNeighbor = [nx, ny];
-        bestFitness = currentFitness;
-      }
-    }
-
-    setG(...bestNeighbor, 1);
-    stack.push(current);
-    current = bestNeighbor;
-  } else if (stack.length > 0) {
-    current = stack.pop();
-  } else {
-    return true;
-  }
-  if (Math.random() < swapProbability) {
-    swapCurrentWithRandomStack();
-  }
-  return false;
-}
-
-// FIXME remove
-function searchPoints(array, points) {
-	let indices = [];
-	for (let point of points) {
-		let found = false;
-		for (let i = 0; i < array.length; i++) {
-			if (array[i][0] === point[0] && array[i][1] === point[1]) {
-				indices.push(i);
-				found = true;
-				break;
+	if (availableNeighbors.length > 0) {
+		let bestNeighbor = availableNeighbors[0];
+		let bestFitness = getFitness(bestNeighbor[0], bestNeighbor[1]);
+		for (let i = 1; i < availableNeighbors.length; i++) {
+			let [nx, ny] = availableNeighbors[i];
+			let currentFitness = getFitness(nx, ny);
+			if (currentFitness > bestFitness) {
+				bestNeighbor = [nx, ny];
+				bestFitness = currentFitness;
 			}
 		}
-		if (!found) {
-			indices.push(-1);
-		}
+
+		setG(...bestNeighbor, 1);
+		stack.push(current);
+		current = bestNeighbor;
+	} else if (stack.length > 0) {
+		current = stack.pop();
+	} else {
+		return true;
 	}
-	return indices;
+	if (Math.random() < swapProbability) {
+		swapCurrentWithRandomStack();
+	}
+	return false;
 }
 
 function getNeighBorderVertices(i, j) {
 	let tiles = getTilesContainingVertex(i, j);
-	let vertexes = [];
+	let vertices = [];
 	for (let t of tiles) {
 		if(getG(...t) == 0) continue
-		vertexes.push(...getTileVertices(...t));
+		vertices.push(...getTileVertices(...t));
 	}
 	let seen = {};
-	for (let v of vertexes) {
+	for (let v of vertices) {
 		const key = v.join(',');
 		if(!seen[key]) {
 			seen[key] = 1;
@@ -295,7 +296,7 @@ function getNeighBorderVertices(i, j) {
 		}
 	}
 	let borderVertices = [];
-	for (let v of vertexes) {
+	for (let v of vertices) {
 		const key = v.join(',');
 		if(seen[key] == 1) {
 			if(v[0]==i && v[1]==j) continue
@@ -306,12 +307,12 @@ function getNeighBorderVertices(i, j) {
 }
 
 function vertIsInPath(path, i, j) {
-    for (let v of path) {
-        if (v[0] === i && v[1] === j) {
-            return true;
-        }
-    }
-    return false;
+	for (let v of path) {
+		if (v[0] === i && v[1] === j) {
+			return true;
+		}
+	}
+	return false;
 }
 
 // i,j is a tile coordinates
